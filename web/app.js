@@ -151,11 +151,17 @@ function renderDoctor() {
   $('#zipBtn').disabled = !D.entries.some(e => e.out); $('#repBtn').disabled = !D.entries.length;
   if (!D.entries.length) { list.appendChild(el('div', {class: 'empty', text: 'ماكو خطوط بعد. اسحب ملفات أو مجلد الخطوط فوق.'})); return; }
   const groups = {};
-  const onlyAr = window.NATIVE && $('#onlyAr').checked;
+  const q = filterQ();
+  const onlyAr = window.NATIVE && $('#onlyAr').checked && !q;
   let hidden = 0;
-  const visible = D.entries.filter(e => { const h = onlyAr && e.installed && (e.status === 'ok' || e.status === 'companion') && (!e.r || e.r.kind !== 'arabic'); if (h) hidden++; return !h; });
+  const visible = D.entries.filter(e => { if (!matches(e, q)) return false; const h = onlyAr && e.installed && (e.status === 'ok' || e.status === 'companion') && (!e.r || e.r.kind !== 'arabic'); if (h) hidden++; return !h; });
   if (hidden) chips.appendChild(el('span', {class: 'chip'}, [document.createTextNode('مخفية (لاتينية سليمة)'), el('b', {text: String(hidden)})]));
-  if (window.NATIVE) $('#installAll').disabled = !D.entries.some(e => e.out && e.status === 'fix');
+  const sel = selected();
+  if (window.NATIVE) $('#installAll').disabled = !sel.some(e => e.out && e.status === 'fix');
+  $('#selCount').textContent = q ? 'محدد: ' + sel.length + ' ملف' : '';
+  $('#zipBtn').textContent = q ? 'تنزيل المحدد ZIP' : 'تنزيل الكل مرتب ZIP';
+  $('#zipBtn').disabled = !sel.some(e => e.out);
+  if (q && !visible.length) list.appendChild(el('div', {class: 'empty', text: window.NATIVE && !D.entries.some(e => e.installed) ? 'ماكو خطوط بهذا الاسم بالقائمة. اضغط "افحص الخطوط المنصبة بجهازك" حتى نقرأ خطوط ويندوز.' : 'ماكو خطوط اسمها يحتوي "' + q + '".'}));
   visible.forEach(e => { const g = e.r ? (e.r.newFamily || e.r.info.family) : 'ملفات أخرى'; (groups[g] = groups[g] || []).push(e); });
   const sample = $('#sample').value || 'ابراهيم روسم';
   Object.keys(groups).forEach(g => {
@@ -194,7 +200,7 @@ function renderDoctor() {
 }
 function readme() {
   const L = ['IBRA خطوط — تقرير فحص الخطوط', 'التاريخ: ' + new Date().toLocaleString('ar-IQ'), ''];
-  D.entries.forEach(e => {
+  selected().forEach(e => {
     L.push('■ ' + e.path + '  [' + (STATUS[e.status] || e.status) + ']');
     if (e.out && e.outName) L.push('   الملف الجديد: ' + e.folder + '/' + e.outName);
     (e.r ? e.r.issues : []).concat(e.note ? [e.note] : []).forEach(t => L.push('   - ' + t));
@@ -207,6 +213,50 @@ function readme() {
 async function downloadOne(e) {
   if (/\.ttf$/.test(e.outName)) return saveFile(e.outName, e.out);
   await saveFile(e.outName.replace(/\.otf$/, '') + '.zip', F.makeZip([{name: e.outName, data: e.out}]));
+}
+/* selection by name (e.g. all FS_ fonts) */
+function filterQ() { return ($('#nameFilter').value || '').trim().toLowerCase(); }
+function matches(e, q) {
+  if (!q) return true;
+  const fam = e.r ? (e.r.info.family + ' ' + (e.r.newFamily || '')) : '';
+  return (e.file + ' ' + e.path + ' ' + fam).toLowerCase().includes(q);
+}
+function selected() { const q = filterQ(); return D.entries.filter(e => matches(e, q)); }
+let fT; $('#nameFilter').addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(renderDoctor, 180); });
+function subName() { const q = ($('#nameFilter').value || '').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/[_\s-]+$/, ''); return q ? 'خطوط ' + q : 'خطوط IBRA'; }
+async function ensureScanned() {
+  if (!D.entries.some(e => e.installed)) { toast('نقرأ خطوط جهازك أول…'); await scanInstalled(); }
+}
+if (window.NATIVE) {
+  $('#copyOrig').addEventListener('click', async () => {
+    await ensureScanned();
+    const paths = [...new Set(selected().filter(e => e.installed).map(e => e.installed.path))];
+    if (!paths.length) return toast(filterQ() ? 'ماكو خطوط منصبة بهذا الاسم' : 'اكتب جزء من اسم الخطوط أول، مثلاً FS_');
+    try {
+      const folder = await NATIVE.call('pickFolder', {title: 'اختار وين تنسخ ' + paths.length + ' خط'});
+      if (!folder) return;
+      const r = await NATIVE.call('copyFiles', {paths, folder, sub: subName()});
+      toast('انسخ ' + r.count + ' خط إلى ' + r.folder);
+      NATIVE.call('openFolder', {path: r.folder}).catch(() => {});
+    } catch (e) { toast('ما انسخت: ' + e.message); }
+  });
+  $('#saveFixed').addEventListener('click', async () => {
+    await ensureScanned();
+    const list = selected().filter(e => e.out && e.status !== 'dup');
+    if (!list.length) return toast('ماكو خطوط جاهزة بالتحديد الحالي');
+    try {
+      const folder = await NATIVE.call('pickFolder', {title: 'اختار وين تنحفظ ' + list.length + ' خط مصلّح'});
+      if (!folder) return;
+      const used = {}, files = list.map(e => {
+        let n = e.outName, k = 2; while (used[n.toLowerCase()]) n = e.outName.replace(/(\.\w+)$/, '-' + (k++) + '$1');
+        used[n.toLowerCase()] = 1; return {name: n, b64: NATIVE.toB64(e.out)};
+      });
+      files.push({name: 'تقرير.txt', b64: NATIVE.toB64(new TextEncoder().encode('\uFEFF' + readme()))});
+      const r = await NATIVE.call('writeFiles', {folder, sub: subName() + ' - مصلحة', files});
+      toast('انحفظ ' + (r.count - 1) + ' خط بـ ' + r.folder);
+      NATIVE.call('openFolder', {path: r.folder}).catch(() => {});
+    } catch (e) { toast('ما انحفظت: ' + e.message); }
+  });
 }
 async function installEntry(e, btn) {
   if (!window.NATIVE || !e.out) return;
@@ -225,7 +275,7 @@ if (window.NATIVE) {
   $('#onlyAr').addEventListener('change', renderDoctor);
   $('#openFontsDir').addEventListener('click', () => NATIVE.call('openFontsFolder').catch(() => {}));
   $('#installAll').addEventListener('click', async () => {
-    const todo = D.entries.filter(e => e.out && e.status === 'fix' && !e.installedNow);
+    const todo = selected().filter(e => e.out && e.status === 'fix' && !e.installedNow);
     let n = 0; for (const e of todo) if (await installEntry(e)) n++;
     toast('تنصّب ' + n + ' خط — سكّر وافتح فوتوشوب حتى يشوفها'); renderDoctor();
   });
@@ -259,7 +309,7 @@ if (window.NATIVE) {
 }
 $('#zipBtn').addEventListener('click', () => {
   const files = [], used = {};
-  D.entries.forEach(e => {
+  selected().forEach(e => {
     if (!e.out || e.status === 'dup') return;
     const dir = e.status === 'legacy' || e.status === 'noforms' ? 'قديمة - ما تتصلح/' + e.folder : e.folder;
     let n = dir + '/' + e.outName; let k = 2; while (used[n]) n = dir + '/' + e.outName.replace(/(\.\w+)$/, '-' + (k++) + '$1');

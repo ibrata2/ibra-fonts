@@ -124,6 +124,56 @@ public sealed class Bridge
                 return new JsonObject { ["path"] = r.Path, ["note"] = r.Note };
             }
 
+            case "pickFolder":
+            {
+                var dlg = new Microsoft.Win32.OpenFolderDialog
+                {
+                    Title = Str(a, "title", "اختار مجلد"),
+                    InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)
+                };
+                return dlg.ShowDialog(_window) == true ? JsonValue.Create(dlg.FolderName) : null;
+            }
+
+            case "copyFiles":
+            {
+                // Only font files the app itself listed may be copied.
+                var allowed = new HashSet<string>(_allowed.Values, StringComparer.OrdinalIgnoreCase);
+                var dest = Target(Str(a, "folder"), Str(a, "sub"));
+                int count = 0;
+                if (a["paths"] is JsonArray paths)
+                    foreach (var node in paths)
+                    {
+                        var p = node?.GetValue<string>();
+                        if (p is null || !allowed.Contains(p) || !File.Exists(p)) continue;
+                        File.Copy(p, Unique(dest, Path.GetFileName(p)));
+                        count++;
+                    }
+                Log.Write($"copied {count} fonts → {dest}");
+                return new JsonObject { ["folder"] = dest, ["count"] = count };
+            }
+
+            case "writeFiles":
+            {
+                var dest = Target(Str(a, "folder"), Str(a, "sub"));
+                int count = 0;
+                if (a["files"] is JsonArray files)
+                    foreach (var node in files)
+                    {
+                        if (node is not JsonObject f) continue;
+                        var name = SafeFile(Str(f, "name", "font.ttf"));
+                        await File.WriteAllBytesAsync(Unique(dest, name), Convert.FromBase64String(Str(f, "b64")));
+                        count++;
+                    }
+                return new JsonObject { ["folder"] = dest, ["count"] = count };
+            }
+
+            case "openFolder":
+            {
+                var p = Str(a, "path");
+                if (Directory.Exists(p)) Shell.Explorer("\"" + p + "\"");
+                return null;
+            }
+
             case "openFontsFolder":
                 Shell.Explorer("shell:fonts");
                 return null;
@@ -168,6 +218,31 @@ public sealed class Bridge
             default:
                 throw new InvalidOperationException("أمر غير معروف: " + cmd);
         }
+    }
+
+    private static string SafeFile(string name)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '-');
+        return string.IsNullOrWhiteSpace(name) ? "file" : name.Trim();
+    }
+
+    /// <summary>The chosen folder, plus a tidy subfolder (e.g. "خطوط FS") when the page asks for one.</summary>
+    private static string Target(string folder, string sub)
+    {
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) throw new InvalidOperationException("المجلد غير موجود");
+        var dest = string.IsNullOrWhiteSpace(sub) ? folder : Path.Combine(folder, SafeFile(sub));
+        Directory.CreateDirectory(dest);
+        return dest;
+    }
+
+    /// <summary>A file name in the folder that does not overwrite anything already there.</summary>
+    private static string Unique(string folder, string name)
+    {
+        var path = Path.Combine(folder, name);
+        var stem = Path.GetFileNameWithoutExtension(name);
+        var ext = Path.GetExtension(name);
+        for (int i = 2; File.Exists(path); i++) path = Path.Combine(folder, $"{stem}-{i}{ext}");
+        return path;
     }
 
     private static string FilterFor(string name)

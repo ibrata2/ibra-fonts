@@ -1,3 +1,4 @@
+[hidden]{display:none!important}
 @font-face{font-family:"Aref Ruqaa";src:url(fonts/ArefRuqaa-Regular.ttf) format("truetype");font-weight:400;font-display:swap}
 @font-face{font-family:"Aref Ruqaa";src:url(fonts/ArefRuqaa-Bold.ttf) format("truetype");font-weight:700;font-display:swap}
 @font-face{font-family:"Readex Pro";src:url(fonts/ReadexPro.ttf) format("truetype");font-weight:160 700;font-display:swap}
@@ -125,3 +126,6 @@ html.native .web-only{display:none!important}
 .appinfo{align-items:center;gap:8px}
 .appinfo .mono{font-size:11px;color:var(--gold-dim)}
 .scope{font-family:var(--f-mono);font-size:10.5px;border:1px solid var(--line);border-radius:5px;padding:0 6px;color:var(--mute);margin-inline-end:6px}
+.selbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0 0 12px}
+.selbar .grow{flex:1 1 260px;min-width:0}
+.selcount{font-size:12.5px;color:var(--gold-hi);padding-bottom:9px;font-variant-numeric:tabular-nums}
