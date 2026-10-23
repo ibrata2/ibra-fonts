@@ -174,6 +174,10 @@ public sealed class Bridge
                 return null;
             }
 
+            case "openFontsSettings":
+                Shell.Open("ms-settings:fonts");
+                return null;
+
             case "openFontsFolder":
                 Shell.Explorer("shell:fonts");
                 return null;

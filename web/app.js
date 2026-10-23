@@ -50,7 +50,7 @@ const safeFile = s => (s || 'Font').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g
 
 async function ingest(name, path, u8, extra) {
   const ext = extOf(name);
-  const base = Object.assign({file: name, path: path || name, id: ++D.seq}, extra || {});
+  const base = Object.assign({file: name, path: path || name, id: ++D.seq, src: u8}, extra || {});
   try {
     if (['pfm', 'afm', 'inf', 'ofm', 'fon'].includes(ext)) { D.entries.push(Object.assign(base, {raw: null, kind: 'companion', note: ext === 'fon' ? 'خط نقطي قديم (FON) لنظام ويندوز — فوتوشوب ما يستخدمه.' : 'ملف مقاسات مرافق لخط Type 1 — ما يحتاجه الخط بعد التحويل.'})); return; }
     const tag = F.tagAt(u8, 0);
@@ -66,32 +66,7 @@ async function ingest(name, path, u8, extra) {
     D.entries.push(Object.assign(base, {kind: 'unsupported', note: 'هذا مو ملف خط معروف (' + (ext || 'بدون امتداد') + ').'}));
   } catch (e) { D.entries.push(Object.assign(base, {kind: 'unsupported', note: 'ما قدرنا نقرأ الملف: ' + (e.message || e)})); }
 }
-async function addFiles(files) {
-  const list = Array.from(files); if (!list.length) return;
-  D.entries = D.entries.filter(e => !e.demo);
-  toast('جاري فحص ' + list.length + ' ملف…');
-  for (const f of list) await ingest(f.name, f.webkitRelativePath || f.name, new Uint8Array(await f.arrayBuffer()));
-  process();
-}
 const sleep0 = () => new Promise(r => setTimeout(r, 0));
-async function scanInstalled() {
-  const btn = $('#scanBtn'), txt = $('#scanTxt'); btn.disabled = true;
-  try {
-    const list = await NATIVE.call('listFonts');
-    D.entries = D.entries.filter(e => !e.demo && !e.installed);
-    for (let i = 0; i < list.length; i++) {
-      const f = list[i];
-      if (i % 6 === 0) { txt.textContent = 'جاري القراءة ' + (i + 1) + ' من ' + list.length + '… ' + f.file; await sleep0(); }
-      try {
-        const res = await fetch(f.url); if (!res.ok) throw new Error(res.status);
-        await ingest(f.file, (f.scope === 'user' ? 'خطوطك/' : 'Windows/') + f.file, new Uint8Array(await res.arrayBuffer()), {installed: f});
-      } catch (e) { D.entries.push({file: f.file, path: f.file, id: ++D.seq, kind: 'unsupported', installed: f, note: 'ما انقرى من مجلد الخطوط: ' + e.message}); }
-    }
-    txt.textContent = 'خلصنا: ' + list.length + ' ملف خط بالجهاز.';
-    process();
-  } catch (e) { txt.textContent = 'ما قدرنا نقرأ الخطوط: ' + e.message; }
-  btn.disabled = false;
-}
 function hashKey(u8) { return u8.length + ':' + F.crc32(u8).toString(16); }
 function process() {
   const unlock = $('#unlock').checked, suffix = $('#suffix').value.trim();
@@ -144,24 +119,15 @@ function faceFor(id, u8) {
 function el(tag, attrs, kids) { const n = document.createElement(tag); if (attrs) Object.entries(attrs).forEach(([k, v]) => { if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v; else n.setAttribute(k, v); }); (kids || []).forEach(k => k && n.appendChild(k)); return n; }
 function renderDoctor() {
   const list = $('#list'); list.textContent = '';
-  const counts = {}; D.entries.forEach(e => counts[e.status] = (counts[e.status] || 0) + 1);
+  const counts = {}; D.entries.forEach(e => counts[e.status || 'new'] = (counts[e.status || 'new'] || 0) + 1);
   const chips = $('#chips'); chips.textContent = '';
-  chips.appendChild(el('span', {class: 'chip'}, [document.createTextNode('الكل'), el('b', {text: String(D.entries.length)})]));
   Object.keys(STATUS).forEach(k => { if (counts[k]) chips.appendChild(el('span', {class: 'chip'}, [document.createTextNode(STATUS[k]), el('b', {text: String(counts[k])})])); });
-  $('#zipBtn').disabled = !D.entries.some(e => e.out); $('#repBtn').disabled = !D.entries.length;
-  if (!D.entries.length) { list.appendChild(el('div', {class: 'empty', text: 'ماكو خطوط بعد. اسحب ملفات أو مجلد الخطوط فوق.'})); return; }
-  const groups = {};
-  const q = filterQ();
-  const onlyAr = window.NATIVE && $('#onlyAr').checked && !q;
+  if (!D.entries.some(e => e.status)) { list.appendChild(el('div', {class: 'empty', text: 'التفاصيل تظهر بعد خطوة التصليح.'})); return; }
+  // many Latin fonts that are fine add nothing to read: they are counted, not listed
   let hidden = 0;
-  const visible = D.entries.filter(e => { if (!matches(e, q)) return false; const h = onlyAr && e.installed && (e.status === 'ok' || e.status === 'companion') && (!e.r || e.r.kind !== 'arabic'); if (h) hidden++; return !h; });
-  if (hidden) chips.appendChild(el('span', {class: 'chip'}, [document.createTextNode('مخفية (لاتينية سليمة)'), el('b', {text: String(hidden)})]));
-  const sel = selected();
-  if (window.NATIVE) $('#installAll').disabled = !sel.some(e => e.out && e.status === 'fix');
-  $('#selCount').textContent = q ? 'محدد: ' + sel.length + ' ملف' : '';
-  $('#zipBtn').textContent = q ? 'تنزيل المحدد ZIP' : 'تنزيل الكل مرتب ZIP';
-  $('#zipBtn').disabled = !sel.some(e => e.out);
-  if (q && !visible.length) list.appendChild(el('div', {class: 'empty', text: window.NATIVE && !D.entries.some(e => e.installed) ? 'ماكو خطوط بهذا الاسم بالقائمة. اضغط "افحص الخطوط المنصبة بجهازك" حتى نقرأ خطوط ويندوز.' : 'ماكو خطوط اسمها يحتوي "' + q + '".'}));
+  const visible = D.entries.filter(e => { const h = D.entries.length > 40 && e.status === 'ok' && (!e.r || e.r.kind !== 'arabic'); if (h) hidden++; return !h; });
+  if (hidden) list.appendChild(el('div', {class: 'empty', text: hidden + ' خط لاتيني سليم ما معروض بالتفاصيل.'}));
+  const groups = {};
   visible.forEach(e => { const g = e.r ? (e.r.newFamily || e.r.info.family) : 'ملفات أخرى'; (groups[g] = groups[g] || []).push(e); });
   const sample = $('#sample').value || 'ابراهيم روسم';
   Object.keys(groups).forEach(g => {
@@ -174,19 +140,14 @@ function renderDoctor() {
       if (e.installed) head.appendChild(el('span', {class: 'scope', text: e.installed.scope === 'user' ? 'منصب لك' : 'خط ويندوز'}));
       if (r) head.appendChild(el('span', {class: 'mono', style: 'font-size:12px;color:var(--mute)', text: r.info.style + ' · ' + r.info.flavor + ' · ' + r.info.numGlyphs + ' شكل' + (r.info.arabic ? ' · عربي ' + r.info.arabic + ' حرف' : '')}));
       meta.appendChild(head);
-      const fn = el('div', {class: 'fn'}); fn.textContent = e.path + (e.out && e.outName ? '  →  ' : ''); if (e.out && e.outName) fn.appendChild(el('i', {text: e.folder + '/' + e.outName}));
+      const fn = el('div', {class: 'fn'}); fn.textContent = e.path + (e.out && e.outName ? '  →  ' : ''); if (e.out && e.outName) fn.appendChild(el('i', {text: e.outName}));
       meta.appendChild(fn);
       const iss = (r ? r.issues : []).slice(); if (e.note) iss.push(e.note);
       if (iss.length) meta.appendChild(el('ul', {class: 'iss'}, iss.map(t => el('li', {text: t}))));
       else if (st === 'ok') meta.appendChild(el('ul', {class: 'fx'}, [el('li', {text: 'ماكو مشاكل — الخط جاهز لفوتوشوب.'})]));
       const fx = (e.pre || []).concat(r && st === 'fix' ? r.fixes : []);
       if (fx.length) meta.appendChild(el('ul', {class: 'fx'}, fx.map(t => el('li', {text: t}))));
-      if (e.out) {
-        const acts = el('div', {class: 'acts row'});
-        if (window.NATIVE && st === 'fix') { const ib = el('button', {class: 'btn gold', text: e.installed && e.installed.scope === 'user' ? 'بدّل المنصب بالمصلّح' : 'نصّب بجهازك'}); ib.addEventListener('click', () => installEntry(e, ib)); acts.appendChild(ib); }
-        const b = el('button', {class: 'btn', text: 'تنزيل هذا الخط'}); b.addEventListener('click', () => downloadOne(e)); acts.appendChild(b);
-        meta.appendChild(acts);
-      }
+      if (e.out && !window.NATIVE) { const b = el('button', {class: 'btn', text: 'تنزيل هذا الخط'}); b.addEventListener('click', () => downloadOne(e)); meta.appendChild(el('div', {class: 'acts row'}, [b])); }
       const prev = el('div', {class: 'prev'});
       if (e.kind === 'sfnt') {
         const bf = !e.converted && faceFor('b' + e.id, e.raw), af = e.out && e.out !== e.raw ? faceFor('a' + e.id, e.out) : null;
@@ -199,103 +160,240 @@ function renderDoctor() {
   });
 }
 function readme() {
-  const L = ['IBRA خطوط — تقرير فحص الخطوط', 'التاريخ: ' + new Date().toLocaleString('ar-IQ'), ''];
-  selected().forEach(e => {
-    L.push('■ ' + e.path + '  [' + (STATUS[e.status] || e.status) + ']');
-    if (e.out && e.outName) L.push('   الملف الجديد: ' + e.folder + '/' + e.outName);
+  const L = ['IBRA خطوط — تقرير تصليح الخطوط', 'التاريخ: ' + new Date().toLocaleString('ar-IQ'), ''];
+  D.entries.forEach(e => {
+    L.push('■ ' + e.path + '  [' + (STATUS[e.status] || e.status || '') + ']');
+    if (e.out && e.outName) L.push('   الملف الجديد: ' + e.outName);
     (e.r ? e.r.issues : []).concat(e.note ? [e.note] : []).forEach(t => L.push('   - ' + t));
     (e.pre || []).concat(e.r && e.status === 'fix' ? e.r.fixes : []).forEach(t => L.push('   ✓ ' + t));
     L.push('');
   });
-  L.push('ملاحظة: احذف النسخ القديمة من ويندوز قبل تنصيب الجديدة، وامسح كاش خطوط فوتوشوب (CT Font Cache).');
+  L.push('السجل:');
+  $$('#log li:not(.empty)').forEach(li => L.push('  ' + li.querySelector('time').textContent + '  ' + li.querySelector('span').textContent));
+  L.push('', 'بعد التنصيب: سكّر فوتوشوب وافتحه، وإذا ما ظهرت الخطوط امسح كاش خطوط أدوبي (CT Font Cache).');
   return L.join('\r\n');
 }
 async function downloadOne(e) {
   if (/\.ttf$/.test(e.outName)) return saveFile(e.outName, e.out);
   await saveFile(e.outName.replace(/\.otf$/, '') + '.zip', F.makeZip([{name: e.outName, data: e.out}]));
 }
-/* selection by name (e.g. all FS_ fonts) */
-function filterQ() { return ($('#nameFilter').value || '').trim().toLowerCase(); }
-function matches(e, q) {
-  if (!q) return true;
-  const fam = e.r ? (e.r.info.family + ' ' + (e.r.newFamily || '')) : '';
-  return (e.file + ' ' + e.path + ' ' + fam).toLowerCase().includes(q);
+
+/* ---------- the four steps, and a log of everything that happens ---------- */
+const W = {label: '', step: 1};
+const ICON = {ok: '✓', warn: '!', err: '✕', info: 'i', sum: '✓'};
+function stamp() { const d = new Date(); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); }
+function log(kind, text) {
+  const ol = $('#log'), em = ol.querySelector('.empty'); if (em) em.remove();
+  const li = el('li', {class: kind === 'sum' ? 'ok sum' : kind}, [el('i', {text: ICON[kind] || '•'}), el('span', {text}), el('time', {text: stamp()})]);
+  ol.appendChild(li); ol.scrollTop = ol.scrollHeight;
 }
-function selected() { const q = filterQ(); return D.entries.filter(e => matches(e, q)); }
-let fT; $('#nameFilter').addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(renderDoctor, 180); });
-function subName() { const q = ($('#nameFilter').value || '').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/[_\s-]+$/, ''); return q ? 'خطوط ' + q : 'خطوط IBRA'; }
-async function ensureScanned() {
-  if (!D.entries.some(e => e.installed)) { toast('نقرأ خطوط جهازك أول…'); await scanInstalled(); }
+function setStep(n) {
+  W.step = n;
+  [1, 2, 3, 4].forEach(i => { const s = $('#st' + i); s.classList.toggle('done', i < n); s.classList.toggle('active', i === n); s.classList.toggle('locked', i > n); });
 }
-if (window.NATIVE) {
-  $('#copyOrig').addEventListener('click', async () => {
-    await ensureScanned();
-    const paths = [...new Set(selected().filter(e => e.installed).map(e => e.installed.path))];
-    if (!paths.length) return toast(filterQ() ? 'ماكو خطوط منصبة بهذا الاسم' : 'اكتب جزء من اسم الخطوط أول، مثلاً FS_');
-    try {
-      const folder = await NATIVE.call('pickFolder', {title: 'اختار وين تنسخ ' + paths.length + ' خط'});
-      if (!folder) return;
-      const r = await NATIVE.call('copyFiles', {paths, folder, sub: subName()});
-      toast('انسخ ' + r.count + ' خط إلى ' + r.folder);
-      NATIVE.call('openFolder', {path: r.folder}).catch(() => {});
-    } catch (e) { toast('ما انسخت: ' + e.message); }
+const ltr = p => '\u2066' + p + '\u2069'; // keep Windows paths readable inside Arabic text
+function cleanName(s) { return (s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/[_\s.-]+$/, '').trim(); }
+function subName(tail) { const q = cleanName(W.label); return (q ? 'خطوط ' + q : 'خطوط IBRA') + tail; }
+function busy(btn, on, text) { if (!btn) return; if (on) { btn.dataset.t = btn.textContent; btn.textContent = text || 'جاري…'; btn.disabled = true; } else { btn.textContent = btn.dataset.t || btn.textContent; btn.disabled = false; } }
+
+function afterSelect(how) {
+  const fonts = D.entries.filter(e => e.kind !== 'companion').length, extra = D.entries.length - fonts;
+  if (!D.entries.length) { $('#st1txt').textContent = 'ما انحدد شي. جرّب اسم ثاني أو اختار ملفات.'; setStep(1); return; }
+  log('ok', 'تم تحديد ' + fonts + ' خط ' + how + (extra ? ' (وياها ' + extra + ' ملف مرافق)' : '') + '.');
+  $('#st1txt').textContent = 'محدد: ' + fonts + ' خط ' + how + '.';
+  ['st2txt', 'st3txt', 'st4txt'].forEach(id => $('#' + id).dataset.orig && ($('#' + id).textContent = $('#' + id).dataset.orig));
+  D.entries.forEach(e => { e.status = null; e.out = null; });
+  renderDoctor(); setStep(2);
+}
+['st2txt', 'st3txt', 'st4txt'].forEach(id => { $('#' + id).dataset.orig = $('#' + id).textContent; });
+
+async function selectInstalled() {
+  const btn = $('#pickInstalled'), q = $('#nameFilter').value.trim();
+  busy(btn, true, 'جاري القراءة…');
+  try {
+    const all = await NATIVE.call('listFonts');
+    const list = q ? all.filter(f => f.file.toLowerCase().includes(q.toLowerCase())) : all;
+    if (!list.length) { log('warn', 'ما لكينا خطوط بجهازك اسمها يحتوي "' + q + '".'); busy(btn, false); return; }
+    D.entries = []; W.label = q;
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      if (i % 5 === 0) { $('#st1txt').textContent = 'جاري القراءة ' + (i + 1) + ' من ' + list.length + '… ' + f.file; await sleep0(); }
+      try {
+        const res = await fetch(f.url); if (!res.ok) throw new Error(res.status);
+        await ingest(f.file, (f.scope === 'user' ? 'خطوطك/' : 'Windows/') + f.file, new Uint8Array(await res.arrayBuffer()), {installed: f});
+      } catch (e) { D.entries.push({file: f.file, path: f.file, id: ++D.seq, kind: 'unsupported', installed: f, note: 'ما انقرى من مجلد الخطوط: ' + e.message}); }
+    }
+    afterSelect(q ? 'من خطوط جهازك باسم "' + q + '"' : 'من كل خطوط جهازك');
+  } catch (e) { log('err', 'ما قدرنا نقرأ خطوط الجهاز: ' + e.message); }
+  busy(btn, false);
+}
+async function addFiles(files, how) {
+  const list = Array.from(files); if (!list.length) return;
+  D.entries = [];
+  const first = list[0].webkitRelativePath ? list[0].webkitRelativePath.split('/')[0] : '';
+  W.label = first || $('#nameFilter').value.trim();
+  $('#st1txt').textContent = 'جاري قراءة ' + list.length + ' ملف…'; await sleep0();
+  for (const f of list) await ingest(f.name, f.webkitRelativePath || f.name, new Uint8Array(await f.arrayBuffer()));
+  afterSelect(how || (first ? 'من مجلد "' + first + '"' : 'من الملفات'));
+}
+function loadDemo() {
+  const sp = sampleProject(); sp.meta.family = 'Old Diwani Demo';
+  const demo = F.buildFont(sp, {legacy: true});
+  D.entries = [{file: 'مثال - خط قديم.otf', path: 'مثال - خط قديم.otf', id: ++D.seq, raw: demo.otf, src: demo.otf, kind: 'sfnt', demo: true}];
+  W.label = 'مثال'; afterSelect('(مثال تجريبي)');
+}
+
+// step 2: keep the originals
+function originals() {
+  const seen = new Set(), installed = [], files = [];
+  D.entries.forEach(e => {
+    const key = e.installed ? e.installed.path : e.path; if (seen.has(key) || !e.src) return; seen.add(key);
+    if (e.installed) installed.push(e.installed.path); else files.push({name: e.path.split('/').pop(), data: e.src, path: e.path});
   });
-  $('#saveFixed').addEventListener('click', async () => {
-    await ensureScanned();
-    const list = selected().filter(e => e.out && e.status !== 'dup');
-    if (!list.length) return toast('ماكو خطوط جاهزة بالتحديد الحالي');
-    try {
-      const folder = await NATIVE.call('pickFolder', {title: 'اختار وين تنحفظ ' + list.length + ' خط مصلّح'});
-      if (!folder) return;
-      const used = {}, files = list.map(e => {
-        let n = e.outName, k = 2; while (used[n.toLowerCase()]) n = e.outName.replace(/(\.\w+)$/, '-' + (k++) + '$1');
-        used[n.toLowerCase()] = 1; return {name: n, b64: NATIVE.toB64(e.out)};
-      });
-      files.push({name: 'تقرير.txt', b64: NATIVE.toB64(new TextEncoder().encode('\uFEFF' + readme()))});
-      const r = await NATIVE.call('writeFiles', {folder, sub: subName() + ' - مصلحة', files});
-      toast('انحفظ ' + (r.count - 1) + ' خط بـ ' + r.folder);
-      NATIVE.call('openFolder', {path: r.folder}).catch(() => {});
-    } catch (e) { toast('ما انحفظت: ' + e.message); }
-  });
+  return {installed, files, count: installed.length + files.length};
 }
-async function installEntry(e, btn) {
-  if (!window.NATIVE || !e.out) return;
+async function doBackup() {
+  const o = originals(), btn = $('#backupBtn');
+  if (!o.count) { log('warn', 'ماكو ملفات أصلية نحفظها.'); setStep(3); return; }
+  busy(btn, true, 'جاري النسخ…');
+  try {
+    if (window.NATIVE) {
+      const folder = await NATIVE.call('pickFolder', {title: 'وين تنحفظ النسخة الأصلية؟'});
+      if (!folder) { log('info', 'انلغى اختيار المجلد — النسخة الأصلية ما انحفظت.'); busy(btn, false); return; }
+      const sub = subName(' - الأصلية'); let n = 0, dest = '';
+      if (o.installed.length) { const r = await NATIVE.call('copyFiles', {paths: o.installed, folder, sub}); n += r.count; dest = r.folder; }
+      if (o.files.length) { const r = await NATIVE.call('writeFiles', {folder, sub, files: o.files.map(f => ({name: f.name, b64: NATIVE.toB64(f.data)}))}); n += r.count; dest = r.folder; }
+      log('ok', 'تم نسخ ' + n + ' خط أصلي إلى: ' + ltr(dest));
+      $('#st2txt').textContent = 'انحفظت الأصلية بـ ' + ltr(dest);
+    } else {
+      const name = subName(' - الأصلية') + '.zip';
+      await saveFile(name, F.makeZip(o.files.map(f => ({name: f.name, data: f.data}))));
+      log('ok', 'تم تنزيل نسخة من ' + o.count + ' خط أصلي بملف ' + name);
+      $('#st2txt').textContent = 'انحفظت الأصلية بملف ' + name;
+    }
+    setStep(3);
+  } catch (e) { log('err', 'ما انحفظت الأصلية: ' + e.message); }
+  busy(btn, false);
+}
+
+// step 3: fix
+async function doFix() {
+  const btn = $('#fixBtn'); busy(btn, true, 'جاري التصليح…'); await sleep0();
+  log('info', 'بدأ فحص وتصليح ' + D.entries.length + ' ملف…');
+  try { process(); } catch (e) { log('err', 'صار خطأ أثناء التصليح: ' + e.message); busy(btn, false); return; }
+  const c = {fix: 0, ok: 0, bad: 0, dup: 0, other: 0}, quiet = D.entries.length > 40;
+  D.entries.forEach(e => {
+    const name = e.file + (e.part != null ? ' #' + (e.part + 1) : '');
+    if (e.status === 'fix') { c.fix++; const what = (e.pre || []).concat(e.r ? e.r.fixes : []).join(' ') || 'تم ترتيبه'; log('ok', 'تم تصليح ' + name + ': ' + what); }
+    else if (e.status === 'ok') { c.ok++; if (!quiet) log('info', name + ' سليم — ما يحتاج تصليح.'); }
+    else if (e.status === 'dup') { c.dup++; log('info', name + ' مكرر — نفس ملف ثاني بالضبط.'); }
+    else if (e.status === 'companion') { c.other++; }
+    else { c.bad++; const why = (e.r && e.r.issues[0]) || e.note || ''; log('warn', name + ' ما ينصلح تلقائياً: ' + why); }
+  });
+  const sum = 'النتيجة: ' + c.fix + ' تصلّح، ' + c.ok + ' سليم' + (c.bad ? '، ' + c.bad + ' ما ينصلح' : '') + (c.dup ? '، ' + c.dup + ' مكرر' : '') + '.';
+  log('sum', sum); $('#st3txt').textContent = sum;
+  renderDoctor();
+  busy(btn, false);
+  if (c.fix + c.ok) setStep(4); else log('warn', 'ماكو خط جاهز للحفظ.');
+}
+
+// step 4: save the fixed fonts (and install them)
+async function doSave() {
+  const list = D.entries.filter(e => e.out && (e.status === 'fix' || e.status === 'ok'));
+  if (!list.length) { log('warn', 'ماكو خطوط جاهزة للحفظ.'); return; }
+  const btn = $('#saveBtn'); busy(btn, true, 'جاري الحفظ…');
+  const used = {}, named = list.map(e => { let n = e.outName, k = 2; while (used[n.toLowerCase()]) n = e.outName.replace(/(\.\w+)$/, '-' + (k++) + '$1'); used[n.toLowerCase()] = 1; return {e, name: n}; });
+  const nFix = list.filter(e => e.status === 'fix').length, nOk = list.length - nFix;
+  try {
+    if (window.NATIVE) {
+      const folder = await NATIVE.call('pickFolder', {title: 'اختار مجلد جديد للخطوط المصلّحة'});
+      if (!folder) { log('info', 'انلغى اختيار المجلد — ما انحفظ شي.'); busy(btn, false); return; }
+      const files = named.map(x => ({name: x.name, b64: NATIVE.toB64(x.e.out)}));
+      files.push({name: 'تقرير.txt', b64: NATIVE.toB64(new TextEncoder().encode('﻿' + readme()))});
+      const r = await NATIVE.call('writeFiles', {folder, sub: subName(' - مصلحة'), files});
+      log('ok', 'تم حفظ ' + list.length + ' خط (' + nFix + ' مصلّح + ' + nOk + ' سليم) وتقرير إلى: ' + ltr(r.folder));
+      $('#st4txt').textContent = 'انحفظت بـ ' + ltr(r.folder);
+      if ($('#alsoInstall').checked) {
+        let ok = 0;
+        for (const e of list.filter(x => x.status === 'fix')) if (await installEntry(e)) ok++;
+        if (ok) log('ok', 'تم تنصيب ' + ok + ' خط مصلّح بجهازك.');
+      }
+      NATIVE.call('openFolder', {path: r.folder}).catch(() => {});
+    } else {
+      const files = named.map(x => ({name: x.name, data: x.e.out}));
+      files.push({name: 'تقرير.txt', data: new TextEncoder().encode('﻿' + readme())});
+      const name = subName(' - مصلحة') + '.zip';
+      await saveFile(name, F.makeZip(files));
+      log('ok', 'تم تنزيل ' + list.length + ' خط (' + nFix + ' مصلّح + ' + nOk + ' سليم) بملف ' + name);
+      $('#st4txt').textContent = 'انحفظت بملف ' + name;
+    }
+    log('sum', 'خلصنا. سكّر فوتوشوب وافتحه حتى تظهر الخطوط الجديدة.');
+    setStep(5);
+  } catch (e) { log('err', 'ما انحفظت: ' + e.message); }
+  busy(btn, false);
+}
+
+async function installEntry(e) {
+  if (!window.NATIVE || !e.out) return false;
   const fam = e.r ? (e.r.newFamily || e.r.info.family) : 'Font';
-  if (btn) btn.disabled = true;
   try {
     const replace = e.installed && e.installed.scope === 'user' ? e.installed.path : null;
     const res = await NATIVE.call('installFont', {file: e.outName, b64: NATIVE.toB64(e.out), family: fam, replace});
-    e.installedNow = res.path; toast('تنصّب: ' + fam + (res.note ? ' — ' + res.note : ''));
-    if (btn) btn.textContent = 'تنصّب ✓';
+    e.installedNow = res.path;
+    log('ok', (replace ? 'تم تبديل ' : 'تم تنصيب ') + fam + (res.note ? ' — ' + res.note : ''));
     return true;
-  } catch (err) { toast('ما تنصّب: ' + err.message); if (btn) btn.disabled = false; return false; }
+  } catch (err) { log('err', 'ما تنصّب ' + fam + ': ' + err.message); return false; }
 }
-if (window.NATIVE) {
-  $('#scanBtn').addEventListener('click', scanInstalled);
-  $('#onlyAr').addEventListener('change', renderDoctor);
-  $('#openFontsDir').addEventListener('click', () => NATIVE.call('openFontsFolder').catch(() => {}));
-  $('#installAll').addEventListener('click', async () => {
-    const todo = selected().filter(e => e.out && e.status === 'fix' && !e.installedNow);
-    let n = 0; for (const e of todo) if (await installEntry(e)) n++;
-    toast('تنصّب ' + n + ' خط — سكّر وافتح فوتوشوب حتى يشوفها'); renderDoctor();
+
+$('#backupBtn').addEventListener('click', doBackup);
+$('#skipBackup').addEventListener('click', () => { log('info', 'تخطيت حفظ النسخة الأصلية.'); $('#st2txt').textContent = 'متخطّاة.'; setStep(3); });
+$('#fixBtn').addEventListener('click', doFix);
+$('#saveBtn').addEventListener('click', doSave);
+$('#restart').addEventListener('click', () => { D.entries = []; W.label = ''; $('#st1txt').textContent = 'اكتب جزء من اسمها حتى نحددها من خطوط جهازك، أو اختار ملفات ومجلدات.'; ['st2txt', 'st3txt', 'st4txt'].forEach(id => $('#' + id).textContent = $('#' + id).dataset.orig); renderDoctor(); setStep(1); log('info', 'بداية جديدة.'); });
+$('#copyLog').addEventListener('click', () => {
+  const t = $$('#log li:not(.empty)').map(li => li.querySelector('time').textContent + '  ' + li.querySelector('span').textContent).join('\n');
+  try { navigator.clipboard.writeText(t).then(() => toast('انسخ السجل'), () => toast('ما انسخ')); } catch (e) { toast('ما انسخ'); }
+});
+$('#fIn').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+$('#dIn').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+['unlock', 'suffix'].forEach(id => $('#' + id).addEventListener('change', () => { if (D.entries.some(e => e.status)) { process(); log('info', 'تغيّرت الخيارات — أعدنا التصليح.'); } }));
+$('#sample').addEventListener('input', () => $$('.pv:not(.na)').forEach(p => { p.lastChild.textContent = $('#sample').value; }));
+const demoLink = el('button', {class: 'btn ghost', text: 'جرّب على مثال'}); demoLink.addEventListener('click', loadDemo); $('#st1 .sb').appendChild(demoLink);
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); }));
+drop.addEventListener('drop', async e => {
+  e.preventDefault();
+  const items = e.dataTransfer.items, out = [];
+  const walk = (entry) => new Promise(res => {
+    if (entry.isFile) entry.file(f => { out.push(f); res(); }, () => res());
+    else if (entry.isDirectory) { const rd = entry.createReader(); const all = []; const next = () => rd.readEntries(es => { if (!es.length) Promise.all(all.map(walk)).then(res); else { all.push(...es); next(); } }, () => res()); next(); }
+    else res();
   });
+  if (items && items[0] && items[0].webkitGetAsEntry) { await Promise.all(Array.from(items).map(i => i.webkitGetAsEntry()).filter(Boolean).map(walk)); addFiles(out, 'بالسحب'); }
+  else addFiles(e.dataTransfer.files, 'بالسحب');
+});
+
+if (window.NATIVE) {
+  $('#pickInstalled').addEventListener('click', selectInstalled);
+  $('#nameFilter').addEventListener('keydown', e => { if (e.key === 'Enter') selectInstalled(); });
+  $('#openFontsDir').addEventListener('click', () => NATIVE.call('openFontsSettings').catch(() => {}));
   const cb = $('#cacheBtn'); let armed = 0;
   cb.addEventListener('click', async () => {
-    if (Date.now() - armed > 3000) { armed = Date.now(); cb.textContent = 'متأكد؟ اضغط مرة ثانية'; setTimeout(() => cb.textContent = 'امسح كاش خطوط أدوبي الآن', 3000); return; }
-    cb.textContent = 'امسح كاش خطوط أدوبي الآن';
+    if (Date.now() - armed > 3000) { armed = Date.now(); cb.textContent = 'متأكد؟ اضغط مرة ثانية'; setTimeout(() => cb.textContent = 'امسح كاش خطوط أدوبي', 3000); return; }
+    cb.textContent = 'امسح كاش خطوط أدوبي';
     try {
       const r = await NATIVE.call('clearAdobeCache');
-      if (r.running && r.running.length) toast('سكّر أول: ' + r.running.join('، '));
-      else toast(r.deleted ? 'انمسح ' + r.deleted + ' ملف/مجلد كاش — افتح فوتوشوب من جديد' : 'ماكو كاش خطوط لأدوبي بهذا الجهاز');
-    } catch (e) { toast('ما انمسح: ' + e.message); }
+      if (r.running && r.running.length) log('warn', 'ما انمسح الكاش — سكّر أول: ' + r.running.join('، '));
+      else log('ok', r.deleted ? 'تم مسح ' + r.deleted + ' ملف/مجلد من كاش خطوط أدوبي.' : 'ماكو كاش خطوط لأدوبي بهذا الجهاز.');
+    } catch (e) { log('err', 'ما انمسح الكاش: ' + e.message); }
   });
   NATIVE.call('info').then(i => { $('#verTxt').textContent = 'v' + i.version; }).catch(() => {});
   // fonts opened with "افحص بـ IBRA خطوط" from the right-click menu
   NATIVE.call('pendingFiles').then(async list => {
     if (!list || !list.length) return;
-    D.entries = D.entries.filter(e => !e.demo);
+    D.entries = []; W.label = '';
     for (const f of list) { try { const r = await fetch(f.url); await ingest(f.file, f.file, new Uint8Array(await r.arrayBuffer())); } catch (e) {} }
-    process(); showTab('doc');
+    showTab('doc'); afterSelect('من قائمة الزر الأيمن');
   }).catch(() => {});
   setTimeout(() => NATIVE.call('checkUpdate').then(u => {
     if (!u || !u.newer) return;
@@ -306,37 +404,9 @@ if (window.NATIVE) {
       NATIVE.call('installUpdate').catch(e => { toast('ما تحدث: ' + e.message); b.disabled = false; b.textContent = 'تحديث ' + u.latest; });
     });
   }).catch(() => {}), 4000);
+} else {
+  $('#st1txt').textContent = 'اختار ملفات الخطوط أو مجلدها، أو اسحبها هنا.';
 }
-$('#zipBtn').addEventListener('click', () => {
-  const files = [], used = {};
-  selected().forEach(e => {
-    if (!e.out || e.status === 'dup') return;
-    const dir = e.status === 'legacy' || e.status === 'noforms' ? 'قديمة - ما تتصلح/' + e.folder : e.folder;
-    let n = dir + '/' + e.outName; let k = 2; while (used[n]) n = dir + '/' + e.outName.replace(/(\.\w+)$/, '-' + (k++) + '$1');
-    used[n] = 1; files.push({name: n, data: e.out});
-  });
-  files.push({name: 'تقرير.txt', data: new TextEncoder().encode('﻿' + readme())});
-  saveFile('IBRA-Fonts-' + new Date().toISOString().slice(0, 10) + '.zip', F.makeZip(files));
-});
-$('#repBtn').addEventListener('click', () => saveFile('تقرير-الخطوط.txt', '﻿' + readme()));
-$('#clearDoc').addEventListener('click', () => { D.entries = []; renderDoctor(); });
-$('#fIn').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
-$('#dIn').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
-['unlock', 'suffix'].forEach(id => $('#' + id).addEventListener('change', process));
-$('#sample').addEventListener('input', () => $$('.pv:not(.na)').forEach(p => { p.lastChild.textContent = $('#sample').value; }));
-const drop = $('#drop');
-['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
-['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-drop.addEventListener('drop', async e => {
-  const items = e.dataTransfer.items, out = [];
-  const walk = (entry) => new Promise(res => {
-    if (entry.isFile) entry.file(f => { out.push(f); res(); }, () => res());
-    else if (entry.isDirectory) { const rd = entry.createReader(); const all = []; const next = () => rd.readEntries(es => { if (!es.length) Promise.all(all.map(walk)).then(res); else { all.push(...es); next(); } }, () => res()); next(); }
-    else res();
-  });
-  if (items && items[0] && items[0].webkitGetAsEntry) { await Promise.all(Array.from(items).map(i => i.webkitGetAsEntry()).filter(Boolean).map(walk)); addFiles(out); }
-  else addFiles(e.dataTransfer.files);
-});
 
 /* =====================================================================
    EDITOR
@@ -413,21 +483,21 @@ let live = null, traceRect = null, dragInfo = null;
 function draw() {
   const W = cv.width, g = G(), c = BYKEY[cur];
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, W);
-  ctx.fillStyle = '#0a0907'; ctx.fillRect(0, 0, W, W);
+  ctx.fillStyle = '#fdfcf8'; ctx.fillRect(0, 0, W, W);
   // metrics
   const hline = (y, col, dash, lab) => { const [, py] = toPx(0, y); ctx.strokeStyle = col; ctx.setLineDash(dash || []); ctx.lineWidth = 1 * DPR; ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(W, py); ctx.stroke(); ctx.setLineDash([]); if (lab) { ctx.fillStyle = col; ctx.font = (10 * DPR) + 'px IBM Plex Mono, monospace'; ctx.direction = 'ltr'; ctx.textAlign = 'left'; ctx.fillText(lab, 6 * DPR, py - 4 * DPR); } };
-  hline(800, '#3a3322', [4 * DPR, 4 * DPR], 'ascender 800'); hline(400, '#2c271b', [2 * DPR, 6 * DPR], '400');
-  hline(-350, '#3a3322', [4 * DPR, 4 * DPR], 'descender -350');
+  hline(800, '#cfc5ad', [4 * DPR, 4 * DPR], 'ascender 800'); hline(400, '#e2dac6', [2 * DPR, 6 * DPR], '400');
+  hline(-350, '#cfc5ad', [4 * DPR, 4 * DPR], 'descender -350');
   const jh = P.meta.joinH || 60; const [, jy0] = toPx(0, 0), [, jy1] = toPx(0, jh);
-  ctx.fillStyle = 'rgba(201,168,76,.07)'; ctx.fillRect(0, jy1, W, jy0 - jy1);
-  hline(0, '#c9a84c', null, 'baseline 0');
+  ctx.fillStyle = 'rgba(160,124,34,.08)'; ctx.fillRect(0, jy1, W, jy0 - jy1);
+  hline(0, '#a07c22', null, 'baseline 0');
   // box
   const [x0] = toPx(0, 0), [x1] = toPx(g.adv, 0);
-  ctx.strokeStyle = '#5b4d2a'; ctx.lineWidth = 1.5 * DPR; ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0, W); ctx.moveTo(x1, 0); ctx.lineTo(x1, W); ctx.stroke();
-  ctx.fillStyle = '#c9a84c'; ctx.beginPath(); ctx.arc(x1, W - 16 * DPR, 6 * DPR, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#d6c9a6'; ctx.lineWidth = 1.5 * DPR; ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0, W); ctx.moveTo(x1, 0); ctx.lineTo(x1, W); ctx.stroke();
+  ctx.fillStyle = '#a07c22'; ctx.beginPath(); ctx.arc(x1, W - 16 * DPR, 6 * DPR, 0, 7); ctx.fill();
   // join markers
   const needL = c && (c.form === 'init' || c.form === 'medi'), needR = c && (c.form === 'fina' || c.form === 'medi' || (c.lam && c.form === 'fina'));
-  const mark = (x) => { const [px, py] = toPx(x, jh / 2); ctx.fillStyle = '#e2675a'; ctx.beginPath(); ctx.arc(px, py, 7 * DPR, 0, 7); ctx.fill(); };
+  const mark = (x) => { const [px, py] = toPx(x, jh / 2); ctx.fillStyle = '#c0402c'; ctx.beginPath(); ctx.arc(px, py, 7 * DPR, 0, 7); ctx.fill(); };
   if (needL) mark(0); if (needR) mark(g.adv);
   // reference
   if (refImg && g.ref !== false) {
@@ -437,11 +507,11 @@ function draw() {
   // onion
   if ($('#onion').checked && c && c.form !== 'isol') {
     const base = c.lam ? 'la' + c.lam.toString(16).toUpperCase().padStart(4, '0') : c.cp.toString(16).toUpperCase().padStart(4, '0');
-    if (hasG(base)) { ctx.fillStyle = 'rgba(121,168,216,.18)'; ctx.fill(pathOf(G(base).strokes, toPx), 'nonzero'); }
+    if (hasG(base)) { ctx.fillStyle = 'rgba(63,116,181,.16)'; ctx.fill(pathOf(G(base).strokes, toPx), 'nonzero'); }
   }
   // glyph
-  ctx.fillStyle = '#e6c770'; ctx.fill(pathOf(g.strokes, toPx), 'nonzero');
-  if (live) { ctx.fillStyle = '#f3dc95'; ctx.fill(pathOf([live], toPx), 'nonzero'); }
+  ctx.fillStyle = '#1f1b14'; ctx.fill(pathOf(g.strokes, toPx), 'nonzero');
+  if (live) { ctx.fillStyle = '#7d5f14'; ctx.fill(pathOf([live], toPx), 'nonzero'); }
   if (traceRect) { const [a, b] = toPx(traceRect[0], traceRect[1]), [cc, d] = toPx(traceRect[2], traceRect[3]); ctx.strokeStyle = '#79a8d8'; ctx.setLineDash([6 * DPR, 4 * DPR]); ctx.lineWidth = 1.5 * DPR; ctx.strokeRect(Math.min(a, cc), Math.min(b, d), Math.abs(cc - a), Math.abs(d - b)); ctx.setLineDash([]); }
 }
 function refOf(g) { if (!g.ref) g.ref = Object.assign({}, P.lastRef || {x: -150, y: 1050, s: refImg ? 1500 / refImg.width : 1}); return g.ref; }
@@ -596,8 +666,8 @@ function renderPicker() {
 }
 function thumb(tc, k) {
   const t = tc.getContext('2d'), s = tc.width / SPAN; t.clearRect(0, 0, tc.width, tc.height);
-  if (!hasG(k)) { t.fillStyle = '#3a3322'; t.font = '54px "Readex Pro"'; t.textAlign = 'center'; t.textBaseline = 'middle'; t.fillText(BYKEY[k].ch, 60, 62); return; }
-  t.fillStyle = '#e6c770'; t.fill(pathOf(G(k).strokes, (x, y) => [(x - X0) * s, (Y1 - y) * s]), 'nonzero');
+  if (!hasG(k)) { t.fillStyle = '#d3cab4'; t.font = '54px "Readex Pro"'; t.textAlign = 'center'; t.textBaseline = 'middle'; t.fillText(BYKEY[k].ch, 60, 62); return; }
+  t.fillStyle = '#1f1b14'; t.fill(pathOf(G(k).strokes, (x, y) => [(x - X0) * s, (Y1 - y) * s]), 'nonzero');
 }
 function selectGlyph(k) {
   cur = k; const c = BYKEY[k];
@@ -681,15 +751,11 @@ let rzT; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setT
 P = loadProject();
 const savedRef = store.get('ibra-fonts-ref'); if (savedRef && !P.refData) P.refData = savedRef;
 useProject(P);
-// doctor demo: an old-style font made from the sample letters (no joining table)
-try {
-  const sp = sampleProject(); sp.meta.family = 'Old Diwani Demo'; const demo = F.buildFont(sp, {legacy: true});
-  D.entries.push({file: 'مثال - خط قديم.otf', path: 'مثال - خط قديم.otf', id: ++D.seq, raw: demo.otf, kind: 'sfnt', demo: true});
-  process();
-} catch (e) { renderDoctor(); }
+renderDoctor();
 showTab(store.get('ibra-tab') === 'ed' ? 'ed' : 'doc');
 if (window.NATIVE && /selftest/.test(location.search)) {
   setTimeout(() => {
+    loadDemo(); process();
     const d = D.entries[0] || {}; let ed = {};
     try { ed = build(); } catch (e) { ed = {error: e.message}; }
     NATIVE.call('selftest', {demo: d.status || 'none', fixes: d.r ? d.r.fixes.length : 0, after: d.out ? F.analyzeSfnt(d.out, 'x').status : 'none', editorGlyphs: ed.drawn || 0, editorForms: ed.forms || 0, error: ed.error || ''});

@@ -20,56 +20,71 @@
 <main class="wrap">
 <!-- ================= DOCTOR ================= -->
 <section id="v-doc">
-  <h2>افحص خطوطك وصلّحها لفوتوشوب</h2>
-  <p class="lead">ارمي الخطوط هنا (حتى مجلد كامل). الأداة تكشف ليش الخط مخربط بفوتوشوب والستريتر: حروف منفصلة، أسماء مخربطة، خطوط Type 1 القديمة، تضارب أسماء. تصلّح اللي ينصلح وترتب الكل بملف ZIP حسب العائلة. كل شي يصير داخل جهازك، ما ينرفع أي ملف.</p>
+  <h2>صلّح خطوطك لفوتوشوب</h2>
+  <p class="lead">أربع خطوات بالترتيب. كل شي يصير داخل جهازك، وكل خطوة تنكتب بالسجل على الجنب.</p>
 
-  <div class="drop" id="drop">
-    <div>
-      <h3>اسحب ملفات الخطوط هنا</h3>
-      <p>أو اختار ملفات / مجلد من حاسبتك</p>
-      <div class="exts">TTF · OTF · TTC · WOFF · PFB · PFA (Type 1)</div>
+  <div class="flow">
+    <div class="steps" id="drop">
+      <div class="step active" id="st1">
+        <div class="sh"><span class="num"><span>1</span></span><div><h3>اختار الخطوط</h3><p id="st1txt">اكتب جزء من اسمها حتى نحددها من خطوط جهازك، أو اختار ملفات ومجلدات.</p></div></div>
+        <div class="sb">
+          <input type="text" id="nameFilter" class="native-only" placeholder="مثلاً FS_" autocomplete="off" aria-label="جزء من اسم الخطوط">
+          <button class="btn gold native-only" id="pickInstalled">حدد من خطوط جهازي</button>
+          <label class="btn" for="fIn">اختيار ملفات</label>
+          <label class="btn" for="dIn">اختيار مجلد</label>
+          <input type="file" id="fIn" multiple accept=".ttf,.otf,.ttc,.otc,.woff,.woff2,.pfb,.pfa,.pfm,.afm" hidden>
+          <input type="file" id="dIn" webkitdirectory multiple hidden>
+        </div>
+      </div>
+
+      <div class="step locked" id="st2">
+        <div class="sh"><span class="num"><span>2</span></span><div><h3>احفظ نسخة من الأصلية</h3><p id="st2txt">قبل أي تعديل، تنحفظ الخطوط الأصلية بمجلد تختاره حتى ترجعلها إذا احتجت.</p></div></div>
+        <div class="sb">
+          <button class="btn gold" id="backupBtn">اختار مجلد واحفظ الأصلية</button>
+          <button class="btn ghost" id="skipBackup">تخطّي</button>
+        </div>
+      </div>
+
+      <div class="step locked" id="st3">
+        <div class="sh"><span class="num"><span>3</span></span><div><h3>صلّح الخطوط</h3><p id="st3txt">نفحص كل خط ونصلّح وصل الحروف والأسماء وخطوط Type 1 القديمة.</p></div></div>
+        <div class="sb"><button class="btn gold" id="fixBtn">صلّح الخطوط</button></div>
+      </div>
+
+      <div class="step locked" id="st4">
+        <div class="sh"><span class="num"><span>4</span></span><div><h3>احفظ الخطوط المصلّحة</h3><p id="st4txt">اختار مجلد جديد، وتنحفظ بيه الخطوط الجاهزة ووياها تقرير.</p></div></div>
+        <div class="sb">
+          <button class="btn gold" id="saveBtn">اختار مجلد واحفظ المصلّحة</button>
+          <label class="row native-only" for="alsoInstall" style="font-size:13px;color:var(--mute)"><input type="checkbox" id="alsoInstall" checked> ونصّبها بجهازي</label>
+        </div>
+      </div>
+      <div class="row"><button class="btn ghost" id="restart">ابدأ من جديد</button></div>
     </div>
-    <div class="row">
-      <label class="btn gold" for="fIn">اختيار خطوط</label>
-      <label class="btn" for="dIn">اختيار مجلد</label>
-      <input type="file" id="fIn" multiple accept=".ttf,.otf,.ttc,.otc,.woff,.woff2,.pfb,.pfa,.pfm,.afm" hidden>
-      <input type="file" id="dIn" webkitdirectory multiple hidden>
+
+    <aside class="logbox" aria-live="polite">
+      <h3>شنو صار <button class="btn ghost" id="copyLog" style="padding:4px 10px;font-size:12px">نسخ السجل</button></h3>
+      <ol id="log"><li class="empty info"><i>i</i><span>هنا تنكتب كل خطوة: تم التحديد، تم النسخ، تم التصليح، تم الحفظ.</span><time></time></li></ol>
+    </aside>
+  </div>
+
+  <details class="more" id="detailsBox">
+    <summary>تفاصيل كل خط <span class="chips" id="chips" style="display:inline-flex;margin:0 8px"></span></summary>
+    <div id="list"></div>
+  </details>
+
+  <details class="more">
+    <summary>خيارات إضافية</summary>
+    <div class="opts">
+      <label class="f" for="sample">نص المعاينة
+        <input type="text" id="sample" value="ابراهيم روسم للتجميل ١٢٣"></label>
+      <label class="f" for="suffix">لاحقة لاسم الخط المصلّح
+        <input type="text" id="suffix" placeholder="مثلاً Fix"></label>
+      <label class="row" for="unlock" style="font-size:12.5px;color:var(--mute);padding-bottom:7px"><input type="checkbox" id="unlock"> فك قفل التضمين</label>
     </div>
-  </div>
-
-  <div class="native-only nbar">
-    <button class="btn gold" id="scanBtn">افحص الخطوط المنصبة بجهازك</button>
-    <label class="row" for="onlyAr" style="font-size:12.5px;color:var(--mute)"><input type="checkbox" id="onlyAr" checked> اعرض العربية والمشاكل بس</label>
-    <span class="grow" id="scanTxt">يقرأ خطوط ويندوز وخطوطك المنصبة ويكشف المخربط منها.</span>
-    <button class="btn" id="installAll" disabled>نصّب كل المصلّح</button>
-    <button class="btn ghost" id="openFontsDir">مجلد الخطوط</button>
-  </div>
-
-  <div class="opts">
-    <label class="f" for="sample">نص المعاينة
-      <input type="text" id="sample" value="ابراهيم روسم للتجميل ١٢٣"></label>
-    <label class="f" for="suffix">لاحقة لاسم الخط المصلّح (اختياري)
-      <input type="text" id="suffix" placeholder="مثلاً Fix"></label>
-    <label class="row" for="unlock" style="font-size:12.5px;color:var(--mute);padding-bottom:7px"><input type="checkbox" id="unlock"> فك قفل التضمين</label>
-  </div>
-
-  <div class="selbar">
-    <label class="f grow" for="nameFilter">حدد خطوط باسمها
-      <input type="text" id="nameFilter" placeholder="مثلاً FS_ — يحدد كل الخطوط اللي اسمها يحتوي هذا" autocomplete="off"></label>
-    <span class="selcount" id="selCount"></span>
-    <button class="btn native-only" id="copyOrig">انسخ الأصلية لمجلد…</button>
-    <button class="btn gold native-only" id="saveFixed">احفظ المصلّحة بمجلد…</button>
-  </div>
-
-  <div class="row" style="justify-content:space-between">
-    <div class="chips" id="chips"></div>
-    <div class="row">
-      <button class="btn ghost" id="clearDoc">مسح القائمة</button>
-      <button class="btn" id="repBtn">تقرير نصي</button>
-      <button class="btn gold" id="zipBtn">تنزيل الكل مرتب ZIP</button>
+    <div class="row native-only">
+      <button class="btn" id="cacheBtn">امسح كاش خطوط أدوبي</button>
+      <button class="btn" id="openFontsDir">افتح إعدادات الخطوط</button>
     </div>
-  </div>
-  <div id="list"></div>
+  </details>
 
   <details class="guide" id="guide">
     <summary>بعد التصليح: خطوات فوتوشوب 2024 (نسخة 25) والأحدث</summary>
@@ -77,8 +92,7 @@
       <li><b>احذف النسخة القديمة أول.</b> من Settings ← Personalization ← Fonts امسح الخط القديم قبل ما تنصب المصلّح، لأن نفس الاسم مرتين يخلي قائمة أدوبي تتخربط.</li>
       <li><b>نصّب للكل:</b> كليك يمين على الخط ← <span class="mono">Install for all users</span>. إذا ما ظهر بفوتوشوب، هذا أول شي جربه.</li>
       <li><b>محرك الكتابة العربي:</b> Edit ← Preferences ← Type ← Text Engine Options، اختار <span class="mono">Middle Eastern and South Asian</span> وأعد تشغيل فوتوشوب. بعدين من قائمة Paragraph اختار Middle Eastern Composer.</li>
-      <li><b>امسح كاش الخطوط:</b> سكّر فوتوشوب وامسح مجلد الكاش. الصق هذا العنوان بشريط مستكشف الملفات:<br><code class="path" id="cachePath">%AppData%\Adobe\Adobe Photoshop 2025\CT Font Cache</code> <button class="btn ghost" data-copy="cachePath">نسخ</button><br><span class="hint">غيّر 2025 لرقم نسختك. فوتوشوب يبني الكاش من جديد بأول تشغيل.</span>
-        <span class="native-only" style="margin-top:6px"><button class="btn gold" id="cacheBtn">امسح كاش خطوط أدوبي الآن</button></span></li>
+      <li><b>امسح كاش الخطوط:</b> سكّر فوتوشوب وامسح مجلد الكاش. الصق هذا العنوان بشريط مستكشف الملفات:<br><code class="path" id="cachePath">%AppData%\Adobe\Adobe Photoshop 2025\CT Font Cache</code> <button class="btn ghost" data-copy="cachePath">نسخ</button><br><span class="hint">غيّر 2025 لرقم نسختك. فوتوشوب يبني الكاش من جديد بأول تشغيل.</span></li>
       <li><b>خطوط Type 1 (.pfb / .pfm):</b> أدوبي أوقف دعمها من فوتوشوب 23 والستريتر 27.3، لهذا الخطوط القديمة "ما تشتغل". الأداة تحولها لـ OpenType تلقائياً.</li>
       <li><b>الستريتر:</b> من قائمة Paragraph اختار <span class="mono">Middle Eastern &amp; South Asian Single-line Composer</span>، ومن Character خلي اللغة عربي.</li>
       <li><b>الخطوط "القديمة جداً" (Non-Unicode):</b> هذي حروفها محطوطة بمكان الحروف الإنكليزية. ما تتصلح تلقائياً، تحتاج كيبورد أو محول نصوص خاص بيها، أو تنرسم من جديد بالمحرر.</li>

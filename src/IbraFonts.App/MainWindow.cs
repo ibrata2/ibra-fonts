@@ -1,6 +1,4 @@
-using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
@@ -23,11 +21,10 @@ public sealed class MainWindow : Window
         MinWidth = 880;
         MinHeight = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = new SolidColorBrush(Color.FromRgb(13, 12, 10));
+        Background = Brushes.White;
         try { Icon = new BitmapImage(new Uri("pack://application:,,,/Assets/ibra-fonts.ico")); } catch { /* the exe icon still shows */ }
-        _web.DefaultBackgroundColor = System.Drawing.Color.FromArgb(13, 12, 10);
+        _web.DefaultBackgroundColor = System.Drawing.Color.White;
         Content = _web;
-        SourceInitialized += (_, _) => DarkTitleBar();
         Loaded += async (_, _) => await Start();
     }
 
@@ -135,19 +132,5 @@ public sealed class MainWindow : Window
             catch (Exception ex) { Log.Write("download: " + ex.Message); }
             finally { deferral.Complete(); }
         }));
-    }
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
-
-    private void DarkTitleBar()
-    {
-        try
-        {
-            var handle = new WindowInteropHelper(this).Handle;
-            int on = 1;
-            DwmSetWindowAttribute(handle, 20, ref on, sizeof(int)); // DWMWA_USE_IMMERSIVE_DARK_MODE
-        }
-        catch { /* older Windows keeps the light title bar */ }
     }
 }
