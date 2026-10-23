@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Windows app: a WPF window hosting the web engine (web/) in WebView2, plus native font install,
+       Windows font scan and Adobe font-cache cleaning. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>IBRAFonts</AssemblyName>
+    <RootNamespace>IbraFonts.App</RootNamespace>
+    <StartupObject>IbraFonts.App.Program</StartupObject>
+    <ApplicationIcon>..\..\assets\ibra-fonts.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- WPF and WinForms share type names; WinForms is only referenced for System.Drawing.Color (WebView2 background). -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\web\**\*" LinkBase="web" CopyToOutputDirectory="PreserveNewest" />
+    <Resource Include="..\..\assets\ibra-fonts.ico" Link="Assets\ibra-fonts.ico" />
+  </ItemGroup>
+</Project>

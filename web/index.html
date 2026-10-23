@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>IBRA خطوط</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top"><div class="wrap" style="padding-block:0"><div class="bar">
+  <div class="brand"><b>IBRA خطوط</b><span>@ibrata2</span></div>
+  <div class="native-only appinfo"><span class="mono" id="verTxt"></span><button class="btn gold" id="updBtn" hidden>تحديث جديد</button></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-doc" aria-selected="true" data-tab="doc">طبيب الخطوط</button>
+    <button role="tab" id="tab-ed" aria-selected="false" data-tab="ed">محرر الخط</button>
+  </div>
+</div></div></header>
+
+<main class="wrap">
+<!-- ================= DOCTOR ================= -->
+<section id="v-doc">
+  <h2>افحص خطوطك وصلّحها لفوتوشوب</h2>
+  <p class="lead">ارمي الخطوط هنا (حتى مجلد كامل). الأداة تكشف ليش الخط مخربط بفوتوشوب والستريتر: حروف منفصلة، أسماء مخربطة، خطوط Type 1 القديمة، تضارب أسماء. تصلّح اللي ينصلح وترتب الكل بملف ZIP حسب العائلة. كل شي يصير داخل جهازك، ما ينرفع أي ملف.</p>
+
+  <div class="drop" id="drop">
+    <div>
+      <h3>اسحب ملفات الخطوط هنا</h3>
+      <p>أو اختار ملفات / مجلد من حاسبتك</p>
+      <div class="exts">TTF · OTF · TTC · WOFF · PFB · PFA (Type 1)</div>
+    </div>
+    <div class="row">
+      <label class="btn gold" for="fIn">اختيار خطوط</label>
+      <label class="btn" for="dIn">اختيار مجلد</label>
+      <input type="file" id="fIn" multiple accept=".ttf,.otf,.ttc,.otc,.woff,.woff2,.pfb,.pfa,.pfm,.afm" hidden>
+      <input type="file" id="dIn" webkitdirectory multiple hidden>
+    </div>
+  </div>
+
+  <div class="native-only nbar">
+    <button class="btn gold" id="scanBtn">افحص الخطوط المنصبة بجهازك</button>
+    <label class="row" for="onlyAr" style="font-size:12.5px;color:var(--mute)"><input type="checkbox" id="onlyAr" checked> اعرض العربية والمشاكل بس</label>
+    <span class="grow" id="scanTxt">يقرأ خطوط ويندوز وخطوطك المنصبة ويكشف المخربط منها.</span>
+    <button class="btn" id="installAll" disabled>نصّب كل المصلّح</button>
+    <button class="btn ghost" id="openFontsDir">مجلد الخطوط</button>
+  </div>
+
+  <div class="opts">
+    <label class="f" for="sample">نص المعاينة
+      <input type="text" id="sample" value="ابراهيم روسم للتجميل ١٢٣"></label>
+    <label class="f" for="suffix">لاحقة لاسم الخط المصلّح (اختياري)
+      <input type="text" id="suffix" placeholder="مثلاً Fix"></label>
+    <label class="row" for="unlock" style="font-size:12.5px;color:var(--mute);padding-bottom:7px"><input type="checkbox" id="unlock"> فك قفل التضمين</label>
+  </div>
+
+  <div class="row" style="justify-content:space-between">
+    <div class="chips" id="chips"></div>
+    <div class="row">
+      <button class="btn ghost" id="clearDoc">مسح القائمة</button>
+      <button class="btn" id="repBtn">تقرير نصي</button>
+      <button class="btn gold" id="zipBtn">تنزيل الكل مرتب ZIP</button>
+    </div>
+  </div>
+  <div id="list"></div>
+
+  <details class="guide" id="guide">
+    <summary>بعد التصليح: خطوات فوتوشوب 2024 (نسخة 25) والأحدث</summary>
+    <ol>
+      <li><b>احذف النسخة القديمة أول.</b> من Settings ← Personalization ← Fonts امسح الخط القديم قبل ما تنصب المصلّح، لأن نفس الاسم مرتين يخلي قائمة أدوبي تتخربط.</li>
+      <li><b>نصّب للكل:</b> كليك يمين على الخط ← <span class="mono">Install for all users</span>. إذا ما ظهر بفوتوشوب، هذا أول شي جربه.</li>
+      <li><b>محرك الكتابة العربي:</b> Edit ← Preferences ← Type ← Text Engine Options، اختار <span class="mono">Middle Eastern and South Asian</span> وأعد تشغيل فوتوشوب. بعدين من قائمة Paragraph اختار Middle Eastern Composer.</li>
+      <li><b>امسح كاش الخطوط:</b> سكّر فوتوشوب وامسح مجلد الكاش. الصق هذا العنوان بشريط مستكشف الملفات:<br><code class="path" id="cachePath">%AppData%\Adobe\Adobe Photoshop 2025\CT Font Cache</code> <button class="btn ghost" data-copy="cachePath">نسخ</button><br><span class="hint">غيّر 2025 لرقم نسختك. فوتوشوب يبني الكاش من جديد بأول تشغيل.</span>
+        <span class="native-only" style="margin-top:6px"><button class="btn gold" id="cacheBtn">امسح كاش خطوط أدوبي الآن</button></span></li>
+      <li><b>خطوط Type 1 (.pfb / .pfm):</b> أدوبي أوقف دعمها من فوتوشوب 23 والستريتر 27.3، لهذا الخطوط القديمة "ما تشتغل". الأداة تحولها لـ OpenType تلقائياً.</li>
+      <li><b>الستريتر:</b> من قائمة Paragraph اختار <span class="mono">Middle Eastern &amp; South Asian Single-line Composer</span>، ومن Character خلي اللغة عربي.</li>
+      <li><b>الخطوط "القديمة جداً" (Non-Unicode):</b> هذي حروفها محطوطة بمكان الحروف الإنكليزية. ما تتصلح تلقائياً، تحتاج كيبورد أو محول نصوص خاص بيها، أو تنرسم من جديد بالمحرر.</li>
+    </ol>
+  </details>
+</section>
+
+<!-- ================= EDITOR ================= -->
+<section id="v-ed" hidden>
+  <h2>ارسم خطك وصدّره TTF</h2>
+  <p class="lead">ارسم كل حرف بأشكاله الأربعة (منفرد، بداية، وسط، نهاية) بقلم القصبة أو تتبّع صورة لوگو اسمك. الأداة تبني ملف TTF حقيقي فيه وصل الحروف ولام ألف، ينصب على ويندوز ويشتغل بفوتوشوب.</p>
+  <div class="ed">
+    <!-- glyph picker -->
+    <div class="pane left">
+      <h5>الحروف</h5>
+      <div class="seg" id="grpSeg">
+        <button data-g="letters" aria-pressed="true">حروف</button>
+        <button data-g="lamalef" aria-pressed="false">لا</button>
+        <button data-g="digits" aria-pressed="false">أرقام</button>
+        <button data-g="punct" aria-pressed="false">رموز</button>
+      </div>
+      <div class="glist" id="glist"></div>
+      <h5 style="margin-top:12px">الأشكال</h5>
+      <div class="forms" id="forms"></div>
+      <div style="margin-top:12px" class="hint" id="progTxt"></div>
+      <div class="prog"><i id="progBar"></i></div>
+    </div>
+
+    <!-- canvas -->
+    <div class="pane">
+      <div class="stage">
+        <canvas id="cv" width="900" height="900" aria-label="لوحة رسم الحرف"></canvas>
+        <div class="tag" id="tag"></div>
+      </div>
+      <div class="row" style="margin-top:10px;justify-content:space-between">
+        <div class="row">
+          <button class="btn" id="undo" title="Ctrl+Z">تراجع</button>
+          <button class="btn" id="redo" title="Ctrl+Y">إعادة</button>
+          <button class="btn" id="clearG">مسح الحرف</button>
+        </div>
+        <div class="row">
+          <select id="copyFrom" aria-label="نسخ من شكل ثاني"><option value="">نسخ من…</option></select>
+          <button class="btn" id="joinBtn" title="يضيف خط الوصل على الحافة الصحيحة">أضف الوصلة</button>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:8px">الخط الأفقي الذهبي = خط الكتابة. النقاط الحمراء على الحواف = وين لازم الحرف يوصل بالحرف اللي جنبه. Shift أثناء الرسم = خط مستقيم.</div>
+
+      <div class="preview">
+        <div class="row" style="justify-content:space-between;margin-bottom:6px">
+          <label class="f" for="ptext" style="flex:1">معاينة مباشرة
+            <input type="text" id="ptext" value="ابراهيم روسم"></label>
+          <button class="btn gold" id="realBtn" style="align-self:flex-end">اختبار بالخط الحقيقي</button>
+        </div>
+        <div class="pvbox"><canvas id="pcv"></canvas></div>
+        <div id="realTest" contenteditable="true" hidden spellcheck="false"></div>
+      </div>
+    </div>
+
+    <!-- tools -->
+    <div class="pane tools">
+      <h5>الأداة</h5>
+      <div class="seg" id="toolSeg">
+        <button data-t="nib" aria-pressed="true">قصبة</button>
+        <button data-t="round" aria-pressed="false">دائري</button>
+        <button data-t="erase" aria-pressed="false">ممحاة</button>
+        <button data-t="move" aria-pressed="false">تحريك</button>
+        <button data-t="ref" aria-pressed="false">الصورة</button>
+        <button data-t="trace" aria-pressed="false">تتبّع</button>
+      </div>
+      <div class="kv"><span>عرض القلم</span><input type="range" id="w" min="10" max="220" value="70"><output id="wo">70</output></div>
+      <div class="kv"><span>زاوية القصبة</span><input type="range" id="ang" min="0" max="180" value="35"><output id="ango">35°</output></div>
+      <div class="kv"><span>عرض الحرف</span><input type="range" id="adv" min="60" max="1400" value="600"><output id="advo">600</output></div>
+      <div class="hint" id="toolHint"></div>
+      <div class="sep"></div>
+      <h5>صورة مرجع (اللوگو)</h5>
+      <div class="row"><label class="btn" for="refIn">تحميل صورة</label><input type="file" id="refIn" accept="image/*" hidden><button class="btn ghost" id="refDel">إزالة</button></div>
+      <div class="kv"><span>الشفافية</span><input type="range" id="refOp" min="5" max="100" value="45"><output id="refOpo">45</output></div>
+      <div class="kv"><span>الحجم</span><input type="range" id="refSc" min="10" max="400" value="100"><output id="refSco">100</output></div>
+      <div class="kv"><span>عتبة التتبع</span><input type="range" id="th" min="20" max="235" value="128"><output id="tho">128</output></div>
+      <label class="row" for="inv" style="font-size:12px;color:var(--mute)"><input type="checkbox" id="inv"> الكتابة فاتحة على خلفية غامقة</label>
+      <label class="row" for="onion" style="font-size:12px;color:var(--mute)"><input type="checkbox" id="onion" checked> أظهر الشكل المنفرد بالخلفية</label>
+      <div class="sep"></div>
+      <h5>معلومات الخط</h5>
+      <label class="f" for="mFam">اسم الخط (إنكليزي)<input type="text" id="mFam" value="Ibrahem Rosem Hand"></label>
+      <label class="f" for="mDes">المصمم<input type="text" id="mDes" value="Ibrahim Rosem"></label>
+      <div class="kv"><span>سماكة الوصلة</span><input type="range" id="mJoin" min="20" max="140" value="60"><output id="mJoino">60</output></div>
+      <div class="kv"><span>عرض الفراغ</span><input type="range" id="mSpace" min="80" max="600" value="260"><output id="mSpaceo">260</output></div>
+      <button class="btn gold native-only" id="instFont" style="justify-content:center">نصّب الخط بجهازك</button>
+      <button class="btn gold" id="dlTTF">تنزيل الخط TTF</button>
+      <button class="btn" id="dlZip">TTF + OTF بملف ZIP</button>
+      <div class="row">
+        <button class="btn" id="saveP">حفظ المشروع</button>
+        <label class="btn" for="openP">فتح مشروع</label><input type="file" id="openP" accept=".json,application/json" hidden>
+        <button class="btn ghost" id="newP">مشروع جديد</button>
+      </div>
+      <div class="hint" id="sampleNote">المشروع الحالي مثال جاهز للتجربة. اضغط "مشروع جديد" وابدأ بخطك.</div>
+    </div>
+  </div>
+</section>
+<footer>IBRA خطوط · تصميم وتطوير ابراهيم روسم · @ibrata2</footer>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="vendor/opentype.min.js"></script>
+<script src="vendor/clipper.js"></script>
+<script src="core.js"></script>
+<script src="native.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

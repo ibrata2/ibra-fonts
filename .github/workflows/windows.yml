@@ -1,0 +1,130 @@
+name: Build IBRA Fonts
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Engine tests (real fonts + HarfBuzz)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install test tools
+        run: npm install --no-audit --no-fund
+      - name: Run tests
+        run: npm test
+
+  build:
+    name: Windows app + installer
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Version
+        id: v
+        run: |
+          $version = "1.0.${{ github.run_number }}"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "IBRA Fonts $version"
+
+      - name: Publish the app
+        run: |
+          $out = "build/publish"
+          dotnet publish src/IbraFonts.App/IbraFonts.App.csproj -c Release -r win-x64 --self-contained -p:Version=${{ steps.v.outputs.version }} -p:DebugType=none -o $out
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if (!(Test-Path "$out/IBRAFonts.exe")) { throw "IBRAFonts.exe was not built" }
+          if (!(Test-Path "$out/web/index.html")) { throw "web/index.html was not copied next to the app" }
+          Get-ChildItem "$out/web" | Format-Table Name, Length
+
+      - name: Self-test inside the real app (WebView2 runs the engine)
+        run: |
+          $out = (Resolve-Path build).Path + "\selftest.json"
+          $p = Start-Process build/publish/IBRAFonts.exe -ArgumentList "--selftest", "`"$out`"" -PassThru
+          if (-not $p.WaitForExit(90000)) { Stop-Process -Id $p.Id -Force; throw "the app did not finish its self-test in 90 s" }
+          if (!(Test-Path $out)) { Get-Content "$env:LOCALAPPDATA/IBRA Fonts/log.txt" -ErrorAction SilentlyContinue; throw "no self-test result" }
+          $r = Get-Content $out -Raw | ConvertFrom-Json
+          $r | ConvertTo-Json -Compress
+          if ($r.error) { throw "self-test error: $($r.error)" }
+          if ($r.demo -ne "fix" -or $r.after -ne "ok") { throw "the doctor did not fix the sample font" }
+          if ([int]$r.editorGlyphs -lt 10 -or [int]$r.editorForms -lt 3) { throw "the editor did not build a font" }
+          Write-Host "Doctor and editor work inside the app."
+
+      - name: Check the "search for update" reads GitHub
+        continue-on-error: true
+        run: |
+          Start-Process build/publish/IBRAFonts.exe -ArgumentList "--check-update", "update.txt" -Wait
+          Get-Content update.txt
+
+      - name: Snapshots of the app
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force build/snapshots | Out-Null
+          $p = Start-Process build/publish/IBRAFonts.exe -ArgumentList "--snapshot", "build/snapshots" -PassThru
+          $null = $p.WaitForExit(60000)
+          Get-ChildItem build/snapshots | Format-Table Name, Length
+
+      - name: Keep the snapshots on the ci-snapshots branch (to review the look of each build)
+        continue-on-error: true
+        run: |
+          Set-Location build/snapshots
+          git init -q -b ci-snapshots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Snapshots of ${{ steps.v.outputs.version }}"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-snapshots
+
+      - name: Make sure Inno Setup has Arabic
+        run: |
+          $inno = "${env:ProgramFiles(x86)}\Inno Setup 6"
+          if (!(Test-Path "$inno\ISCC.exe")) { choco install innosetup -y --no-progress }
+          if (!(Test-Path "$inno\Languages\Arabic.isl")) {
+            Invoke-WebRequest "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/Arabic.isl" -OutFile "$inno\Languages\Arabic.isl"
+          }
+
+      - name: Build the installer
+        working-directory: installer
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q /DAppVersion=${{ steps.v.outputs.version }} "/DSource=..\build\publish" IbraFonts.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Get-ChildItem ..\build\installer | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IBRA-Fonts-Setup
+          path: build/installer/*
+
+      - name: Publish a release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.version }}
+          name: IBRA خطوط ${{ steps.v.outputs.version }}
+          make_latest: true
+          files: build/installer/IBRA-Fonts-Setup.exe
+          body: |
+            ## IBRA خطوط ${{ steps.v.outputs.version }}
+            طبيب ومحرر الخطوط العربية — من تصميم و تطوير و تعريب **ابراهيم الخزرجي**
+
+            **التثبيت:** حمّل **IBRA-Fonts-Setup.exe** وشغّله. إذا طلع تحذير Windows: More info ← Run anyway.
+
+            صفحة البرنامج: https://ibrata2.github.io/ibra-fonts/

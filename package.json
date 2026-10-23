@@ -1,0 +1,7 @@
+{
+  "name": "ibra-fonts-tests",
+  "private": true,
+  "description": "Engine tests for IBRA خطوط (run by CI on Linux).",
+  "scripts": { "test": "node tests/core.test.js" },
+  "devDependencies": { "harfbuzzjs": "0.3.6" }
+}
